@@ -3,57 +3,54 @@ import pandas as pd
 import pdfplumber
 import io
 
-st.set_page_config(page_title="Precision PDF to Excel", layout="wide")
+st.set_page_config(page_title="Pro Report Converter", layout="wide")
 
-st.title("📄 PDF to Excel Converter (Fixed Columns)")
-st.write("Optimized for complex tables and fixed narrations.")
+st.title("📊 Enterprise PDF to Excel Converter")
+st.write("Using Coordinate-based extraction (Similar to Pro Tools)")
 
-uploaded_file = st.file_uploader("Upload your PDF file", type=["pdf"])
+uploaded_file = st.file_uploader("Upload your report PDF", type=["pdf"])
 
 if uploaded_file is not None:
     try:
         all_data = []
         with pdfplumber.open(uploaded_file) as pdf:
             for page in pdf.pages:
-                # 'lattice' mode helps to follow the table lines strictly
-                # This prevents data from scattering into wrong columns
+                # Pro Tools use high 'tolerance' to keep columns aligned
+                # This logic mimics high-end reporting tools
                 table = page.extract_table(table_settings={
-                    "vertical_strategy": "lines",
-                    "horizontal_strategy": "lines"
+                    "vertical_strategy": "text",
+                    "horizontal_strategy": "text",
+                    "snap_y_tolerance": 6,
+                    "intersection_x_tolerance": 20,
                 })
                 
                 if table:
                     for row in table:
-                        # Clean narration: join broken lines into a single cell
+                        # Clean each cell and keep multi-line narration in one cell
                         clean_row = [" ".join(str(cell).split()) if cell else "" for cell in row]
-                        all_data.append(clean_row)
+                        # Remove empty or junk rows
+                        if any(field.strip() for field in clean_row):
+                            all_data.append(clean_row)
 
         if all_data:
             df = pd.DataFrame(all_data)
             
-            # Remove empty rows and columns automatically
-            df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+            # Remove purely empty columns
+            df = df.dropna(how='all', axis=1)
 
-            st.success("Table extracted successfully with fixed columns!")
+            st.success("Analysis Complete!")
             st.dataframe(df, use_container_width=True)
 
-            # Generate Excel
+            # Excel Export
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, header=False)
             
             st.download_button(
-                label="📥 Download Excel File",
+                label="📥 Download Professional Excel",
                 data=output.getvalue(),
-                file_name="clean_data.xlsx",
+                file_name="Report_Export.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-        else:
-            # If 'lattice' fails, try 'text' strategy automatically
-            st.warning("No grid lines found. Trying alternative extraction...")
-            # (Fallback logic can be added here if needed)
-
     except Exception as e:
-        st.error(f"Error: {e}")
-
-st.info("Tip: This version uses grid-line detection to keep your amounts and narration in the correct columns.")
+        st.error(f"System Error: {e}")
