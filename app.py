@@ -3,42 +3,50 @@ import pandas as pd
 import pdfplumber
 import io
 
-st.set_page_config(page_title="Pro Report Converter", layout="wide")
+st.set_page_config(page_title="Professional PDF Fixer", layout="wide")
 
-st.title("📊 Enterprise PDF to Excel Converter")
-st.write("Using Coordinate-based extraction (Similar to Pro Tools)")
+st.title("📊 Precision PDF to Excel Converter")
+st.write("Fixed: Narration Merging Logic (One row per entry)")
 
-uploaded_file = st.file_uploader("Upload your report PDF", type=["pdf"])
+uploaded_file = st.file_uploader("Upload your PDF", type=["pdf"])
 
 if uploaded_file is not None:
     try:
-        all_data = []
+        raw_data = []
         with pdfplumber.open(uploaded_file) as pdf:
             for page in pdf.pages:
-                # Pro Tools use high 'tolerance' to keep columns aligned
-                # This logic mimics high-end reporting tools
-                table = page.extract_table(table_settings={
-                    "vertical_strategy": "text",
-                    "horizontal_strategy": "text",
-                    "snap_y_tolerance": 6,
-                    "intersection_x_tolerance": 20,
-                })
-                
+                table = page.extract_table()
                 if table:
-                    for row in table:
-                        # Clean each cell and keep multi-line narration in one cell
-                        clean_row = [" ".join(str(cell).split()) if cell else "" for cell in row]
-                        # Remove empty or junk rows
-                        if any(field.strip() for field in clean_row):
-                            all_data.append(clean_row)
+                    raw_data.extend(table)
 
-        if all_data:
-            df = pd.DataFrame(all_data)
+        if raw_data:
+            final_rows = []
+            current_row = None
+
+            for row in raw_data:
+                # Clean the cells
+                clean_row = [str(cell).strip() if cell else "" for cell in row]
+                
+                # मान लीजिये पहला कॉलम 'Date' या 'ID' है। 
+                # अगर पहली सेल खाली नहीं है, तो यह एक नई एंट्री है।
+                if clean_row[0] != "": 
+                    if current_row:
+                        final_rows.append(current_row)
+                    current_row = clean_row
+                else:
+                    # अगर पहली सेल खाली है, तो यह ऊपर वाली एंट्री की बची हुई नरेशन है।
+                    if current_row:
+                        for i in range(len(clean_row)):
+                            if clean_row[i]:
+                                current_row[i] = current_row[i] + " " + clean_row[i]
             
-            # Remove purely empty columns
-            df = df.dropna(how='all', axis=1)
+            # आखिरी रो को जोड़ें
+            if current_row:
+                final_rows.append(current_row)
 
-            st.success("Analysis Complete!")
+            df = pd.DataFrame(final_rows)
+            
+            st.success("Narration Merged Successfully!")
             st.dataframe(df, use_container_width=True)
 
             # Excel Export
@@ -47,10 +55,10 @@ if uploaded_file is not None:
                 df.to_excel(writer, index=False, header=False)
             
             st.download_button(
-                label="📥 Download Professional Excel",
+                label="📥 Download Clean Excel",
                 data=output.getvalue(),
-                file_name="Report_Export.xlsx",
+                file_name="merged_narration.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
     except Exception as e:
-        st.error(f"System Error: {e}")
+        st.error(f"Error: {e}")
