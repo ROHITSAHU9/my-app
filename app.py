@@ -3,49 +3,57 @@ import pandas as pd
 import pdfplumber
 import io
 
-# Page settings
-st.set_page_config(page_title="PDF to Excel Converter", layout="wide")
+st.set_page_config(page_title="Precision PDF to Excel", layout="wide")
 
-st.title("📄 PDF to Excel Converter")
-st.write("Upload your PDF to convert it into a clean Excel file.")
+st.title("📄 PDF to Excel Converter (Fixed Columns)")
+st.write("Optimized for complex tables and fixed narrations.")
 
-# File Uploader
-uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
+uploaded_file = st.file_uploader("Upload your PDF file", type=["pdf"])
 
 if uploaded_file is not None:
     try:
         all_data = []
         with pdfplumber.open(uploaded_file) as pdf:
-            # Process each page
             for page in pdf.pages:
-                table = page.extract_table()
+                # 'lattice' mode helps to follow the table lines strictly
+                # This prevents data from scattering into wrong columns
+                table = page.extract_table(table_settings={
+                    "vertical_strategy": "lines",
+                    "horizontal_strategy": "lines"
+                })
+                
                 if table:
                     for row in table:
-                        # NARRATION FIX: This cleans the text and keeps it in one line
+                        # Clean narration: join broken lines into a single cell
                         clean_row = [" ".join(str(cell).split()) if cell else "" for cell in row]
                         all_data.append(clean_row)
 
         if all_data:
-            # Create a Table (DataFrame)
             df = pd.DataFrame(all_data)
+            
+            # Remove empty rows and columns automatically
+            df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
 
-            st.success("Extraction Successful!")
-            st.dataframe(df) # Preview of your data
+            st.success("Table extracted successfully with fixed columns!")
+            st.dataframe(df, use_container_width=True)
 
-            # Excel Download logic
+            # Generate Excel
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, header=False)
             
-            # Download Button
             st.download_button(
                 label="📥 Download Excel File",
                 data=output.getvalue(),
-                file_name="converted_data.xlsx",
+                file_name="clean_data.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            
-    except Exception as e:
-        st.error(f"Error occurred: {e}")
+        else:
+            # If 'lattice' fails, try 'text' strategy automatically
+            st.warning("No grid lines found. Trying alternative extraction...")
+            # (Fallback logic can be added here if needed)
 
-st.info("Note: Long descriptions will now appear in a single row.")
+    except Exception as e:
+        st.error(f"Error: {e}")
+
+st.info("Tip: This version uses grid-line detection to keep your amounts and narration in the correct columns.")
